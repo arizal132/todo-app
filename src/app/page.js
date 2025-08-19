@@ -413,7 +413,7 @@ export default function Home() {
             >
               <p className="text-sm text-gray-600 text-center">
                 Showing <strong className="text-indigo-600">{filteredTodos.length}</strong> of <strong>{todos.length}</strong> tasks
-                {searchTerm && <span> matching "<strong className="text-purple-600">{searchTerm}</strong>"</span>}
+                {searchTerm && <span> matching &quot;<strong className="text-purple-600">{searchTerm}</strong>&quot;</span>}
               </p>
             </motion.div>
           )}
