@@ -38,7 +38,7 @@ export default function Home() {
   };
 
   // Fetch todos with error handling
-  const fetchTodos = async () => {
+  const fetchTodos = useCallback(async () => {
     if (!isAuthenticated) return;
     
     setTodosLoading(true);
@@ -59,7 +59,7 @@ export default function Home() {
     } finally {
       setTodosLoading(false);
     }
-  };
+  }, [isAuthenticated, calculateStats, showNotification]);
 
   // Add new todo with optimistic updates
   const addTodo = async (todoData) => {
@@ -180,7 +180,7 @@ export default function Home() {
       setTodos([]);
       setStats({ total: 0, completed: 0, pending: 0 });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchTodos]);
 
   // Loading screen with modern design
   if (loading) {
@@ -364,7 +364,7 @@ export default function Home() {
                 <div className="w-12 h-12 border-4 border-gray-200 rounded-full animate-spin border-t-indigo-600"></div>
               </div>
               <p className="mt-4 text-lg font-medium text-gray-600">Loading your todos...</p>
-              <p className="text-sm text-gray-500">This won't take long</p>
+              <p className="text-sm text-gray-500">This won&apos;t take long</p>
             </div>
           ) : todos.length === 0 ? (
             <div className="text-center py-16">
