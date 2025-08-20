@@ -320,16 +320,16 @@ export default function Home() {
     }
   }, [isAuthenticated, fetchTodos]);
 
-  // FIXED: Clean loading screen with single spinner and pulse effect
+  // FIXED: Clean loading screen with single spinner and pulse effect - Extended duration
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="text-center">
           <div className="relative flex justify-center">
-            {/* Main spinner */}
-            <div className="w-16 h-16 border-4 border-blue-200 rounded-full animate-spin border-t-blue-600"></div>
-            {/* Subtle pulse effect */}
-            <div className="absolute w-16 h-16 border-4 border-blue-100 rounded-full animate-ping opacity-20"></div>
+            {/* Main spinner with slower rotation */}
+            <div className="w-16 h-16 border-4 border-blue-200 rounded-full animate-spin border-t-blue-600" style={{ animationDuration: '1.5s' }}></div>
+            {/* Subtle pulse effect with slower pulse */}
+            <div className="absolute w-16 h-16 border-4 border-blue-100 rounded-full animate-ping opacity-20" style={{ animationDuration: '2s' }}></div>
           </div>
           <p className="mt-6 text-lg font-medium text-gray-700">Loading your workspace...</p>
           <p className="text-sm text-gray-500 mt-1">Please wait a moment</p>
@@ -508,8 +508,8 @@ export default function Home() {
           {todosLoading ? (
             <div className="text-center py-12">
               <div className="relative flex justify-center">
-                {/* FIXED: Single clean loading spinner */}
-                <div className="w-12 h-12 border-4 border-gray-200 rounded-full animate-spin border-t-indigo-600"></div>
+                {/* FIXED: Single clean loading spinner with slower rotation */}
+                <div className="w-12 h-12 border-4 border-gray-200 rounded-full animate-spin border-t-indigo-600" style={{ animationDuration: '1.5s' }}></div>
               </div>
               <p className="mt-4 text-lg font-medium text-gray-600">Loading your todos...</p>
               <p className="text-sm text-gray-500">This won&apos;t take long</p>
