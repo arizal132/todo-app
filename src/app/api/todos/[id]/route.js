@@ -1,12 +1,24 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Todo from '@/models/Todo';
+import { getTokenFromRequest, getUserFromToken } from '@/lib/auth';
 import mongoose from 'mongoose';
 
-// GET - Ambil todo berdasarkan ID
+// GET - Ambil todo berdasarkan ID (hanya milik user yang login)
 export async function GET(request, { params }) {
   try {
     await connectDB();
+    
+    // Verifikasi authentication
+    const token = getTokenFromRequest(request);
+    const user = getUserFromToken(token);
+    
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     
     if (!mongoose.Types.ObjectId.isValid(params.id)) {
       return NextResponse.json(
@@ -15,7 +27,11 @@ export async function GET(request, { params }) {
       );
     }
 
-    const todo = await Todo.findById(params.id);
+    const todo = await Todo.findOne({ 
+      _id: params.id, 
+      userId: user.userId 
+    });
+    
     if (!todo) {
       return NextResponse.json(
         { success: false, error: 'Todo not found' },
@@ -32,10 +48,21 @@ export async function GET(request, { params }) {
   }
 }
 
-// PUT - Update todo berdasarkan ID
+// PUT - Update todo (hanya milik user yang login)
 export async function PUT(request, { params }) {
   try {
     await connectDB();
+    
+    // Verifikasi authentication
+    const token = getTokenFromRequest(request);
+    const user = getUserFromToken(token);
+    
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     
     if (!mongoose.Types.ObjectId.isValid(params.id)) {
       return NextResponse.json(
@@ -45,8 +72,8 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const todo = await Todo.findByIdAndUpdate(
-      params.id,
+    const todo = await Todo.findOneAndUpdate(
+      { _id: params.id, userId: user.userId },
       { ...body, updatedAt: Date.now() },
       { new: true, runValidators: true }
     );
@@ -67,10 +94,21 @@ export async function PUT(request, { params }) {
   }
 }
 
-// DELETE - Hapus todo berdasarkan ID
+// DELETE - Hapus todo (hanya milik user yang login)
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
+    
+    // Verifikasi authentication
+    const token = getTokenFromRequest(request);
+    const user = getUserFromToken(token);
+    
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     
     if (!mongoose.Types.ObjectId.isValid(params.id)) {
       return NextResponse.json(
@@ -79,7 +117,11 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    const todo = await Todo.findByIdAndDelete(params.id);
+    const todo = await Todo.findOneAndDelete({
+      _id: params.id,
+      userId: user.userId
+    });
+    
     if (!todo) {
       return NextResponse.json(
         { success: false, error: 'Todo not found' },

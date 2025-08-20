@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "bcryptjs": "^3.0.2",
     "framer-motion": "^12.23.12",
+    "js-cookie": "^3.0.5",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.540.0",
     "mongodb": "^6.18.0",
     "mongoose": "^8.17.2",
