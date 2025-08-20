@@ -25,7 +25,7 @@ export default function Home() {
   }, []);
 
   // Show notification
-  const showNotification = (message, type = 'success') => {
+  const showNotification = useCallback((message, type = 'success') => {
     if (type === 'success') {
       setSuccess(message);
       setError('');
@@ -35,44 +35,115 @@ export default function Home() {
       setSuccess('');
       setTimeout(() => setError(''), 3000);
     }
-  };
+  }, []);
 
-  // Fetch todos with error handling
-  const fetchTodos = useCallback(async () => {
+  // Enhanced fetch todos with better error handling and retry mechanism
+  const fetchTodos = useCallback(async (retryCount = 0) => {
     if (!isAuthenticated) return;
     
     setTodosLoading(true);
     try {
-      const response = await fetch('/api/todos');
-      if (!response.ok) throw new Error('Failed to fetch todos');
+      // Get auth token from local storage or context if available
+      const token = localStorage.getItem('authToken') || user?.token;
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+
+      const response = await fetch('/api/todos', {
+        method: 'GET',
+        headers,
+        credentials: 'include', // Include cookies for authentication
+      });
+
+      // Handle different HTTP status codes
+      if (response.status === 401) {
+        // Unauthorized - redirect to login
+        logout();
+        showNotification('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      if (response.status === 404) {
+        // API endpoint not found
+        showNotification('API endpoint not found. Please check your server configuration.', 'error');
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText || 'Failed to fetch todos'}`);
+      }
       
       const result = await response.json();
+      
       if (result.success) {
-        setTodos(result.data);
-        calculateStats(result.data);
+        setTodos(result.data || []);
+        calculateStats(result.data || []);
       } else {
-        throw new Error(result.error || 'Failed to fetch todos');
+        throw new Error(result.error || result.message || 'Failed to fetch todos');
       }
     } catch (error) {
       console.error('Error fetching todos:', error);
-      showNotification('Failed to load todos. Please try again.', 'error');
+      
+      // Check if it's a network error
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        if (retryCount < 2) {
+          // Retry up to 2 times for network errors
+          setTimeout(() => fetchTodos(retryCount + 1), 1000 * (retryCount + 1));
+          return;
+        }
+        showNotification('Network error. Please check your connection and try again.', 'error');
+      } else {
+        showNotification(error.message || 'Failed to load todos. Please try again.', 'error');
+      }
+      
+      // Set empty array as fallback
+      setTodos([]);
+      calculateStats([]);
     } finally {
       setTodosLoading(false);
     }
-  }, [isAuthenticated, calculateStats, showNotification]);
+  }, [isAuthenticated, calculateStats, showNotification, user, logout]);
 
-  // Add new todo with optimistic updates
+  // Enhanced add todo with better error handling
   const addTodo = async (todoData) => {
+    if (!todoData.title?.trim()) {
+      showNotification('Todo title is required', 'error');
+      return { success: false, error: 'Todo title is required' };
+    }
+
     try {
+      const token = localStorage.getItem('authToken') || user?.token;
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+
       const response = await fetch('/api/todos', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(todoData),
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          ...todoData,
+          title: todoData.title.trim(),
+          completed: false,
+          createdAt: new Date().toISOString()
+        }),
       });
       
-      if (!response.ok) throw new Error('Failed to create todo');
+      if (response.status === 401) {
+        logout();
+        showNotification('Session expired. Please login again.', 'error');
+        return { success: false, error: 'Unauthorized' };
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText || 'Failed to create todo'}`);
+      }
       
       const result = await response.json();
       if (result.success) {
@@ -82,34 +153,62 @@ export default function Home() {
         showNotification('Todo created successfully! 🎉');
         return { success: true };
       }
-      throw new Error(result.error || 'Failed to create todo');
+      throw new Error(result.error || result.message || 'Failed to create todo');
     } catch (error) {
-      showNotification(error.message, 'error');
-      return { success: false, error: error.message };
+      console.error('Error adding todo:', error);
+      const errorMessage = error.message || 'Failed to create todo. Please try again.';
+      showNotification(errorMessage, 'error');
+      return { success: false, error: errorMessage };
     }
   };
 
-  // Update todo with optimistic updates
+  // Enhanced update todo with better error handling
   const updateTodo = async (id, todoData) => {
+    if (!id) {
+      showNotification('Invalid todo ID', 'error');
+      return { success: false, error: 'Invalid todo ID' };
+    }
+
     const originalTodos = [...todos];
     
     // Optimistic update
     const updatedTodos = todos.map(todo => 
-      todo._id === id ? { ...todo, ...todoData } : todo
+      todo._id === id ? { ...todo, ...todoData, updatedAt: new Date().toISOString() } : todo
     );
     setTodos(updatedTodos);
     calculateStats(updatedTodos);
 
     try {
+      const token = localStorage.getItem('authToken') || user?.token;
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+
       const response = await fetch(`/api/todos/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(todoData),
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          ...todoData,
+          updatedAt: new Date().toISOString()
+        }),
       });
       
-      if (!response.ok) throw new Error('Failed to update todo');
+      if (response.status === 401) {
+        logout();
+        showNotification('Session expired. Please login again.', 'error');
+        // Revert optimistic update
+        setTodos(originalTodos);
+        calculateStats(originalTodos);
+        return { success: false, error: 'Unauthorized' };
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText || 'Failed to update todo'}`);
+      }
       
       const result = await response.json();
       if (result.success) {
@@ -121,45 +220,79 @@ export default function Home() {
         showNotification('Todo updated successfully! ✨');
         return { success: true };
       }
-      throw new Error(result.error || 'Failed to update todo');
+      throw new Error(result.error || result.message || 'Failed to update todo');
     } catch (error) {
+      console.error('Error updating todo:', error);
       // Revert optimistic update
       setTodos(originalTodos);
       calculateStats(originalTodos);
-      showNotification(error.message, 'error');
-      return { success: false, error: error.message };
+      const errorMessage = error.message || 'Failed to update todo. Please try again.';
+      showNotification(errorMessage, 'error');
+      return { success: false, error: errorMessage };
     }
   };
 
-  // Delete todo with confirmation
+  // Enhanced delete todo with better error handling
   const deleteTodo = async (id) => {
+    if (!id) {
+      showNotification('Invalid todo ID', 'error');
+      return { success: false, error: 'Invalid todo ID' };
+    }
+
     const todoToDelete = todos.find(todo => todo._id === id);
-    if (!todoToDelete) return { success: false, error: 'Todo not found' };
+    if (!todoToDelete) {
+      showNotification('Todo not found', 'error');
+      return { success: false, error: 'Todo not found' };
+    }
 
     // Optimistic update
     const filteredTodos = todos.filter(todo => todo._id !== id);
+    const originalTodos = [...todos];
     setTodos(filteredTodos);
     calculateStats(filteredTodos);
 
     try {
+      const token = localStorage.getItem('authToken') || user?.token;
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+
       const response = await fetch(`/api/todos/${id}`, {
         method: 'DELETE',
+        headers,
+        credentials: 'include',
       });
       
-      if (!response.ok) throw new Error('Failed to delete todo');
+      if (response.status === 401) {
+        logout();
+        showNotification('Session expired. Please login again.', 'error');
+        // Revert optimistic update
+        setTodos(originalTodos);
+        calculateStats(originalTodos);
+        return { success: false, error: 'Unauthorized' };
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText || 'Failed to delete todo'}`);
+      }
       
       const result = await response.json();
       if (result.success) {
         showNotification('Todo deleted successfully! 🗑️');
         return { success: true };
       }
-      throw new Error(result.error || 'Failed to delete todo');
+      throw new Error(result.error || result.message || 'Failed to delete todo');
     } catch (error) {
+      console.error('Error deleting todo:', error);
       // Revert optimistic update
-      setTodos([...todos]);
-      calculateStats(todos);
-      showNotification(error.message, 'error');
-      return { success: false, error: error.message };
+      setTodos(originalTodos);
+      calculateStats(originalTodos);
+      const errorMessage = error.message || 'Failed to delete todo. Please try again.';
+      showNotification(errorMessage, 'error');
+      return { success: false, error: errorMessage };
     }
   };
 
@@ -171,6 +304,11 @@ export default function Home() {
       setStats({ total: 0, completed: 0, pending: 0 });
       showNotification('Logged out successfully. See you soon! 👋');
     }
+  };
+
+  // Handle manual refresh
+  const handleRefresh = () => {
+    fetchTodos();
   };
 
   useEffect(() => {
@@ -263,7 +401,14 @@ export default function Home() {
                 <p className="text-sm text-gray-500">Stay organized, stay productive</p>
               </div>
             </div>
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={handleRefresh}
+                className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-700 hover:bg-gray-50/50 rounded-lg transition-all duration-200 border border-gray-200 hover:border-gray-300 backdrop-blur-sm"
+                disabled={todosLoading}
+              >
+                {todosLoading ? '⟳' : '↻'} Refresh
+              </button>
               <div className="hidden sm:block text-right">
                 <p className="text-sm font-medium text-gray-900">Welcome back, {user?.name}! 👋</p>
                 <p className="text-xs text-gray-500">Ready to conquer your day?</p>
@@ -378,6 +523,14 @@ export default function Home() {
               <div className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
                 <span className="text-sm text-blue-700 font-medium">💡 Pro tip: Try adding a simple task to get started</span>
               </div>
+              {error && (
+                <button
+                  onClick={handleRefresh}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Try Again
+                </button>
+              )}
             </div>
           ) : (
             <TodoList 
